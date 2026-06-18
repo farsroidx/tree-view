@@ -1,0 +1,88 @@
+<idea-plugin>
+
+    <name>Tree View</name>
+
+    <version>1.0.0</version>
+
+    <id>ir.farsroidx.tree-view</id>
+
+    <vendor email="mohammadali.riazati@yahoo.com" url="https://github.com/farsroidx">Mohammad ali Riazati</vendor>
+
+    <description><![CDATA[
+        Simplify and beautify your projects with <strong>Farsroidx - Tree View</strong>!
+        <br><br>
+        Tired of JetBrains' default project view messing up your clean structures? This plugin completely reimagines how you navigate through your code, keeping everything organized and ultra-fast.
+        <br><br>
+        <strong>🛠️ Supported Projects (Current Version):</strong>
+        <ol>
+            <b>Maven Project:</b>
+            <ul>
+                <li>📦 <strong>Maven Single-Module Projects</strong> (Perfect, clean layout for standalone applications)</li>
+                <li>🗂️ <strong>Maven Multi-Module Projects</strong> (Beautifully nested hierarchy for large, complex architectures)</li>
+                <li>🔄 <strong>Hybrid Maven Projects</strong> (Perfectly supports both Single and Multi-Module structures side-by-side in the same project view!)</li>
+            </ul>
+        </ol>
+        <i>* Note: Gradle and other build systems are coming soon in future updates!</i>
+        <br><br>
+        <strong>⚡ Key Features:</strong>
+        <ul>
+            <li>🌳 <strong>Clean Package Compacting:</strong> Displays your Java/Kotlin packages in a beautiful, compacted hierarchy, keeping the layout clean and intuitive.</li>
+            <li>🎨 <strong>Real-time VCS Integration:</strong> Visualizes Git statuses with accurate file-color syncing instantly.</li>
+            <li>🌀 <strong>Flicker-Free UI:</strong> Built with a smart loading manager (and a sleek spinner!) to eliminate annoying UI blinks and jumps during project syncs.</li>
+            <li>🔄 <strong>Smart Tree-State Memory:</strong> Automatically remembers your expanded/collapsed folders even after reopening the project.</li>
+            <li>🎯 <strong>Smart Sorting:</strong> Keeps your primary modules sorted by your build configuration, while keeping internal files beautifully alphabetized (Folders first, then files!).</li>
+        </ul>
+        <br>
+        <strong>💡 Missing Source Folders? (Quick Fix):</strong>
+        If IntelliJ indexing gets stuck and some of your source or resource roots (like <code>src/main/java</code>) don't show up correctly, don't panic! You can easily force-sync them in 2 clicks:
+        <ol>
+            <li>Right-click anywhere on the <strong>Project Tree View</strong>.</li>
+            <li>Look right below the <strong>New ➕</strong> menu and click on <strong>"Sync Project Source Roots"</strong>. 🔄✨</li>
+        </ol>
+        <br>
+        Say goodbye to chaotic file lists and welcome a supercharged, clean development workflow!
+        <br><br>
+        And this is just the beginning. Stay tuned for more exciting updates and features in the future!! 🔥😎
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <depends optional="true" config-file="treeview-maven.xml">org.jetbrains.idea.maven</depends>
+    <depends optional="true" config-file="treeview-gradle.xml">com.intellij.gradle</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <postStartupActivity implementation="ir.farsroidx.ViewActivity"/>
+
+        <notificationGroup id="MavenSourceRootsGroup" displayType="BALLOON" />
+
+    </extensions>
+
+    <actions>
+
+        <action
+            id="ir.farsroidx.maven.SyncSourceRoots"
+            class="ir.farsroidx.maven.actions.SetupSourceRootsAction"
+            text="Sync Project Source Roots"
+            description="Automatically detects and configures project source and resource roots.">
+
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
+
+        </action>
+
+    </actions>
+
+    <change-notes><![CDATA[
+        <h3>v1.0.0 - Initial Release 🎉</h3>
+        <p>Say hello to the ultimate Project Tree View! This release introduces a highly optimized, fully customized tree view for JetBrains IDEs to supercharge your project navigation.</p>
+        <ul>
+            <li>🌳 <strong>Compact Package View:</strong> Displays Kotlin/Java package structures in a compact, organized hierarchy just like standard package views.</li>
+            <li>🔤 <strong>Smart Alphabetical Sorting:</strong> Internal directories and package nodes are now sorted alphabetically, placing folders perfectly at the top and files right below them.</li>
+            <li>📜 <strong>Single & Multi-Module Support:</strong> Fully supports both Maven Single-Module and Multi-Module structures, keeping modules sorted exactly as defined in your root configurations.</li>
+            <li>🎨 <strong>Seamless VCS Colors:</strong> Active Git status colors are fully synced in real-time, providing an immediate visual cue for your modified files.</li>
+            <li>💾 <strong>Tree State Restoration:</strong> Never lose your place! The plugin remembers your exact expanded folders and tree state across IDE restarts.</li>
+            <li>⚡ <strong>Zero Flicker Loading:</strong> Features a smooth <code>CardLayout</code> loading screen with an animated spinner, preventing UI jumps during initial sync.</li>
+        </ul>
+    ]]></change-notes>
+
+</idea-plugin>

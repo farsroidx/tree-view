@@ -1,0 +1,11 @@
+<idea-plugin>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <projectViewPane implementation="ir.farsroidx.maven.MavenProjectViewPane"/>
+
+        <projectViewNodeDecorator implementation="ir.farsroidx.maven.decorator.MavenViewDecorator"/>
+
+    </extensions>
+
+</idea-plugin>
