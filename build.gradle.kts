@@ -63,7 +63,7 @@ tasks {
 tasks.register("export") {
     group = "build"
     description = "Builds and Signs plugin"
-    dependsOn("buildPlugin", "signPlugin")
+    dependsOn("clean", "buildPlugin", "signPlugin")
 }
 
 repositories {
