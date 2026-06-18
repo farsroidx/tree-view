@@ -17,20 +17,10 @@ class MavenViewDecorator : ProjectViewNodeDecorator {
 
         if (isInTest) {
 
-            if (virtualFile.name.contains("(test)", ignoreCase = true)) {
-
-                data.background = JBColor(
-                    Color(175, 235, 155),
-                    Color(35, 70, 35)
-                )
-
-            } else {
-
-                data.background = JBColor(
-                    Color(210, 248, 195),
-                    Color(35, 70, 35, 100)
-                )
-            }
+            data.background = JBColor(
+                Color(210, 248, 195),
+                Color(35, 70, 35, 40)
+            )
         }
     }
 
