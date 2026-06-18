@@ -73,6 +73,16 @@
     </actions>
 
     <change-notes><![CDATA[
+        <h3>v1.1.1 - Tree View Loading Fix & Refresh Stability 🛠️</h3>
+        <p>This patch release resolves a critical UI state issue that could cause the custom project tree to remain stuck on the loading screen after switching between Project View panes.</p>
+        <ul>
+            <li>✅ <strong>Fixed Loading State Restoration:</strong> Resolved an issue where returning to the Farsroidx Tree View could incorrectly keep the view on the loading screen instead of showing the restored tree.</li>
+            <li>🔄 <strong>Improved Tree Refresh Flow:</strong> Refined the refresh lifecycle to better handle pane switching, project view restoration, and Maven readiness checks.</li>
+            <li>🧯 <strong>Prevented Refresh Storms:</strong> Removed unnecessary recursive file status refresh triggers that could cause repeated tree invalidations and UI pressure.</li>
+            <li>⚡ <strong>Smoother View Switching:</strong> Improved stability when switching between different Project View modes, reducing unnecessary rebuilds and repaint operations.</li>
+        </ul>
+        <hr>
+
         <h3>v1.1.0 - Refined Visuals & Stability 🚀</h3>
         <p>This update focuses on visual consistency and platform stability to ensure the best development experience.</p>
         <ul>
@@ -81,6 +91,7 @@
             <li>🛠️ <strong>Internal Optimization:</strong> Refined the project tree rendering engine for even smoother navigation and better resource handling.</li>
         </ul>
         <hr>
+
         <h3>v1.0.0 - Initial Release 🎉</h3>
         <p>Say hello to the ultimate Project Tree View! This release introduces a highly optimized, fully customized tree view for JetBrains IDEs to supercharge your project navigation.</p>
         <ul>

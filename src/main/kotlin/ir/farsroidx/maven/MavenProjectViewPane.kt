@@ -9,7 +9,6 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.ActionCallback
@@ -26,7 +25,6 @@ import ir.farsroidx.files.UniversalFileListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import org.jdom.Element
 import org.jetbrains.idea.maven.project.MavenProjectsManager
 import java.awt.BorderLayout
@@ -51,7 +49,16 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
         myTreeStructure = MavenTreeStructure(project, PANE_ID)
 
         PsiManager.getInstance(project)
-            .addPsiTreeChangeListener(UniversalFileListener(project) { _, _ -> refreshTree() }, this)
+            .addPsiTreeChangeListener(UniversalFileListener(project) { _, type ->
+
+                if (type == UniversalFileListener.EventType.CHILDREN_CHANGED ||
+                    type == UniversalFileListener.EventType.ADDED ||
+                    type == UniversalFileListener.EventType.REMOVED) {
+
+                    refreshTree()
+                }
+
+            }, this)
     }
 
     override fun getId(): String = PANE_ID
@@ -129,7 +136,11 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
         containerPanel.add(loadingPanel, CARD_LOADING)
         containerPanel.add(scrollPane, CARD_TREE)
 
-        cardLayout.show(containerPanel, CARD_LOADING)
+        if (isInitialRestorationDone) {
+            cardLayout.show(containerPanel, CARD_TREE)
+        } else {
+            cardLayout.show(containerPanel, CARD_LOADING)
+        }
 
         ApplicationManager.getApplication().invokeLater {
 
@@ -200,7 +211,6 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
     fun refreshTree() {
 
         val model = structureModel ?: return
-
         val tree = myTree ?: return
 
         val state = if (!isInitialRestorationDone && restoredStateFromXml != null) {
@@ -211,37 +221,33 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
 
         model.invalidateAsync()
 
-        coroutineScope.launch(Dispatchers.EDT) {
+        ApplicationManager.getApplication().invokeLater {
 
-            ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
 
-                if (project.isDisposed) return@invokeLater
+            state?.let { restoreState(it) }
 
-                if (state != null) restoreState(state)
+            val treeModel = tree.model
+            val root = treeModel.root
 
-                val treeModel = tree.model
+            val hasNodes = root != null && treeModel.getChildCount(root) > 0
 
-                val root = treeModel.root
+            val mavenManager = MavenProjectsManager.getInstance(project)
 
-                val hasNodes = root != null && treeModel.getChildCount(root) > 0
+            val isMavenReady = mavenManager.isInitialized && (hasNodes || !mavenManager.hasProjects())
 
-                val mavenManager = MavenProjectsManager.getInstance(project)
+            if (isMavenReady) {
 
-                val isMavenReady = mavenManager.isInitialized && (hasNodes || !mavenManager.hasProjects())
-
-                if (!isInitialRestorationDone && isMavenReady) {
-
+                if (!isInitialRestorationDone) {
                     isInitialRestorationDone = true
-
                     restoredStateFromXml = null
-
-                    cardLayout.show(containerPanel, CARD_TREE)
                 }
 
-                tree.revalidate()
-
-                tree.repaint()
+                cardLayout.show(containerPanel, CARD_TREE)
             }
+
+            tree.revalidate()
+            tree.repaint()
         }
     }
 

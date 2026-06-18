@@ -72,7 +72,7 @@ class UniversalFileWatcher(private val project: Project) : Disposable {
 
         refreshJob = scope.launch {
 
-            delay(150.milliseconds)
+            delay(300.milliseconds)
 
             if (project.isDisposed) return@launch
 
@@ -80,14 +80,14 @@ class UniversalFileWatcher(private val project: Project) : Disposable {
 
                 if (project.isDisposed) return@withContext
 
-                FileStatusManager.getInstance(project).fileStatusesChanged()
-
                 val pane = ProjectView.getInstance(project)
                     .getProjectViewPaneById(MavenProjectViewPane.PANE_ID) as? MavenProjectViewPane
+                    ?: return@withContext
 
-                pane?.refreshTree()
+                pane.refreshTree()
 
-                pane?.tree?.updateUI()
+                pane.tree?.revalidate()
+                pane.tree?.repaint()
             }
         }
     }
