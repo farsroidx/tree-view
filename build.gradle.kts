@@ -1,4 +1,5 @@
 
+import org.codehaus.groovy.ast.tools.GeneralUtils.args
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -10,7 +11,7 @@ plugins {
 }
 
 group = "ir.farsroidx"
-version = "1.0.0"
+version = "1.1.0"
 
 intellijPlatform {
 
@@ -55,9 +56,7 @@ tasks {
     }
 
     patchPluginXml {
-
-        sinceBuild.set("233")
-//        untilBuild.set("251.*")
+        sinceBuild.set("261")
         untilBuild = provider { null }
     }
 }
