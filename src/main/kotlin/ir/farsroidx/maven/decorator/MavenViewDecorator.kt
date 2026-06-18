@@ -13,7 +13,7 @@ class MavenViewDecorator : ProjectViewNodeDecorator {
 
         val virtualFile = node.virtualFile ?: return
 
-        val isInTest = isFolder(virtualFile, "test")
+        val isInTest = isFolder(virtualFile, "(test)")
 
         if (isInTest) {
 
