@@ -2,7 +2,7 @@
 
     <name>Tree View</name>
 
-    <version>1.1.1</version>
+    <version>1.1.2</version>
 
     <id>ir.farsroidx.tree-view</id>
 
@@ -73,6 +73,14 @@
     </actions>
 
     <change-notes><![CDATA[
+        <h3>v1.1.2 - Tree View Error Status Fix 🛠️</h3>
+        <p>This patch release resolves a stubborn UI state issue where file error highlights (red markers) would persist in the custom project tree even after all code issues were fully resolved.</p>
+        <ul>
+            <li>✅ <strong>Fixed Persistent Error States:</strong> Resolved an issue where file nodes incorrectly kept their red error indicators until a manual save (Ctrl + S) was triggered. The tree now dynamically and accurately reflects the file status.</li>
+            <li>🔄 <strong>Synchronized Document Commits:</strong> Refined the tree listener lifecycle to wait for document commits, ensuring real-time status updates without interrupting the IDE's background analysis.</li>
+        </ul>
+        <hr>
+
         <h3>v1.1.1 - Tree View Loading Fix & Refresh Stability 🛠️</h3>
         <p>This patch release resolves a critical UI state issue that could cause the custom project tree to remain stuck on the loading screen after switching between Project View panes.</p>
         <ul>

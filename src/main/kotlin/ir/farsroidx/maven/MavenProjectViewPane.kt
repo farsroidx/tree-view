@@ -13,6 +13,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.ActionCallback
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.PopupHandler
@@ -49,11 +50,32 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
         myTreeStructure = MavenTreeStructure(project, PANE_ID)
 
         PsiManager.getInstance(project)
-            .addPsiTreeChangeListener(UniversalFileListener(project) { _, type ->
+            .addPsiTreeChangeListener(UniversalFileListener(project) { event, type ->
 
                 if (type == UniversalFileListener.EventType.CHILDREN_CHANGED ||
                     type == UniversalFileListener.EventType.ADDED ||
                     type == UniversalFileListener.EventType.REMOVED) {
+
+                    val psiFile = event.file
+
+                    if (psiFile != null) {
+
+                        val documentManager = PsiDocumentManager.getInstance(project)
+
+                        val document = documentManager.getDocument(psiFile)
+
+                        if (document != null) {
+
+                            ApplicationManager.getApplication().invokeLater {
+
+                                if (project.isDisposed) return@invokeLater
+
+                                documentManager.performLaterWhenAllCommitted {
+                                    refreshTree()
+                                }
+                            }
+                        }
+                    }
 
                     refreshTree()
                 }
