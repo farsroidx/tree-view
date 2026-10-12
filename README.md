@@ -26,6 +26,8 @@ These names describe section ordering; packages remain compact nodes. Missing se
 
 Native PSI nodes support selection, Select In, Move/refactoring, drag and drop, VCS colors, problem presentation, and persisted expansion state. Error presentation follows background analysis without a manual save. Native IDE rules determine allowed move and drop targets.
 
+Upgrading to 1.2.0 preserves plugin and pane identifiers. Legacy tree state is migrated when the pane opens; existing Maven ordering properties remain supported.
+
 Root modules retain a source-focused layout. Additional submodule content excludes represented build files, outputs, internal IDE directories, and redundant source wrappers. Maven aggregators without roots are omitted from the source list; their POMs remain available.
 
 ## Build files
@@ -96,4 +98,4 @@ The default build uses the local IntelliJ path in `build.gradle.kts`. To select 
 
 ZIPs are written to `build/distributions`. The `export` task also signs the plugin using configured environment variables. Publishing is a separate explicit operation.
 
-See [architecture](docs/ARCHITECTURE.md), [changelog](CHANGELOG.md), and [release notes](docs/RELEASE_NOTES.md).
+See [architecture](docs/ARCHITECTURE.md) for implementation boundaries and [changelog](CHANGELOG.md) for release history.
