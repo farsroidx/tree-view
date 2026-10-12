@@ -2,6 +2,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
 
+        <projectViewPane implementation="ir.farsroidx.gradle.GradleProjectViewPane"/>
+
     </extensions>
 
 </idea-plugin>

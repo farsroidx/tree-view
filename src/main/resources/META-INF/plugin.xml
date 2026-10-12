@@ -2,47 +2,30 @@
 
     <name>Tree View</name>
 
-    <version>1.1.1</version>
+    <version>1.2.0</version>
 
     <id>ir.farsroidx.tree-view</id>
 
     <vendor email="mohammadali.riazati@yahoo.com" url="https://github.com/farsroidx">Mohammad ali Riazati</vendor>
 
     <description><![CDATA[
-        Simplify and beautify your projects with <strong>Farsroidx - Tree View</strong>!
-        <br><br>
-        Tired of JetBrains' default project view messing up your clean structures? This plugin completely reimagines how you navigate through your code, keeping everything organized and ultra-fast.
-        <br><br>
-        <strong>🛠️ Supported Projects (Current Version):</strong>
-        <ol>
-            <b>Maven Project:</b>
-            <ul>
-                <li>📦 <strong>Maven Single-Module Projects</strong> (Perfect, clean layout for standalone applications)</li>
-                <li>🗂️ <strong>Maven Multi-Module Projects</strong> (Beautifully nested hierarchy for large, complex architectures)</li>
-                <li>🔄 <strong>Hybrid Maven Projects</strong> (Perfectly supports both Single and Multi-Module structures side-by-side in the same project view!)</li>
-            </ul>
-        </ol>
-        <i>* Note: Gradle and other build systems are coming soon in future updates!</i>
-        <br><br>
-        <strong>⚡ Key Features:</strong>
+        <p><strong>Tree View</strong> provides separate Maven and Gradle project panes with compact source packages and grouped build configuration.</p>
+        <h3>Supported projects</h3>
         <ul>
-            <li>🌳 <strong>Clean Package Compacting:</strong> Displays your Java/Kotlin packages in a beautiful, compacted hierarchy, keeping the layout clean and intuitive.</li>
-            <li>🎨 <strong>Real-time VCS Integration:</strong> Visualizes Git statuses with accurate file-color syncing instantly.</li>
-            <li>🌀 <strong>Flicker-Free UI:</strong> Built with a smart loading manager (and a sleek spinner!) to eliminate annoying UI blinks and jumps during project syncs.</li>
-            <li>🔄 <strong>Smart Tree-State Memory:</strong> Automatically remembers your expanded/collapsed folders even after reopening the project.</li>
-            <li>🎯 <strong>Smart Sorting:</strong> Keeps your primary modules sorted by your build configuration, while keeping internal files beautifully alphabetized (Folders first, then files!).</li>
+            <li>Maven standalone, multi-module, and multiple imported root projects.</li>
+            <li>Gradle Groovy and Kotlin DSL builds, imported subprojects, and custom source sets.</li>
         </ul>
-        <br>
-        <strong>💡 Missing Source Folders? (Quick Fix):</strong>
-        If IntelliJ indexing gets stuck and some of your source or resource roots (like <code>src/main/java</code>) don't show up correctly, don't panic! You can easily force-sync them in 2 clicks:
-        <ol>
-            <li>Right-click anywhere on the <strong>Project Tree View</strong>.</li>
-            <li>Look right below the <strong>New ➕</strong> menu and click on <strong>"Sync Project Source Roots"</strong>. 🔄✨</li>
-        </ol>
-        <br>
-        Say goodbye to chaotic file lists and welcome a supercharged, clean development workflow!
-        <br><br>
-        And this is just the beginning. Stay tuned for more exciting updates and features in the future!! 🔥😎
+        <h3>Features</h3>
+        <ul>
+            <li>Source, SourceTest, Resources, ResourcesTest ordering with missing sections omitted.</li>
+            <li>Native asynchronous project-view selection, Move/refactoring, drag and drop, VCS colors, and problem updates.</li>
+            <li>Compact packages, semantic test highlighting, and persisted tree state.</li>
+            <li>Grouped Maven POMs and Gradle build/settings files with module labels.</li>
+            <li>Gradle module properties, conventional version catalogs, and global Gradle User Home properties.</li>
+            <li>Module priorities through <code>farsroidx.order</code>: Maven imported properties or Gradle module-local properties.</li>
+            <li>Bounded <strong>Sync Maven Source Roots</strong> action preserving existing root configuration.</li>
+        </ul>
+        <p>Import or sync Gradle builds to discover their full module graph. Native IDE rules determine allowed move and drop targets.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -54,25 +37,32 @@
 
         <postStartupActivity implementation="ir.farsroidx.ViewActivity"/>
 
+        <projectViewNodeDecorator implementation="ir.farsroidx.view.decorator.BuildViewDecorator"/>
+
         <notificationGroup id="MavenSourceRootsGroup" displayType="BALLOON" />
 
     </extensions>
 
-    <actions>
-
-        <action
-            id="ir.farsroidx.maven.SyncSourceRoots"
-            class="ir.farsroidx.maven.actions.SetupSourceRootsAction"
-            text="Sync Project Source Roots"
-            description="Automatically detects and configures project source and resource roots.">
-
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
-
-        </action>
-
-    </actions>
-
     <change-notes><![CDATA[
+        <h3>v1.2.0 - Gradle Support and Native Tree Integration</h3>
+        <ul>
+            <li><strong>Added:</strong> Separate Gradle pane for Groovy/Kotlin DSL, imported multi-module builds, and custom source sets.</li>
+            <li><strong>Added:</strong> Grouped build/settings files, module properties, version catalogs, global Gradle properties, module labels, and numeric ordering.</li>
+            <li><strong>Fixed:</strong> Native selection, Move/refactoring, and drag-and-drop integration; problem presentation without manual saves.</li>
+            <li><strong>Fixed:</strong> Compact package visibility and Source, SourceTest, Resources, ResourcesTest ordering.</li>
+            <li><strong>Improved:</strong> Shared asynchronous tree lifecycle, merged structural refreshes, state preservation, and bounded Maven root synchronization.</li>
+            <li><strong>Documented:</strong> Source contracts, architecture, configuration, and release notes.</li>
+        </ul>
+        <hr>
+
+        <h3>v1.1.2 - Tree View Error Status Fix 🛠️</h3>
+        <p>This patch release resolves a stubborn UI state issue where file error highlights (red markers) would persist in the custom project tree even after all code issues were fully resolved.</p>
+        <ul>
+            <li>✅ <strong>Fixed Persistent Error States:</strong> Resolved an issue where file nodes incorrectly kept their red error indicators until a manual save (Ctrl + S) was triggered. The tree now dynamically and accurately reflects the file status.</li>
+            <li>🔄 <strong>Synchronized Document Commits:</strong> Refined the tree listener lifecycle to wait for document commits, ensuring real-time status updates without interrupting the IDE's background analysis.</li>
+        </ul>
+        <hr>
+
         <h3>v1.1.1 - Tree View Loading Fix & Refresh Stability 🛠️</h3>
         <p>This patch release resolves a critical UI state issue that could cause the custom project tree to remain stuck on the loading screen after switching between Project View panes.</p>
         <ul>

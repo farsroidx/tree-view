@@ -10,7 +10,9 @@ plugins {
 }
 
 group = "ir.farsroidx"
-version = "1.1.1"
+version = "1.2.0"
+
+val targetPlatformVersion = providers.gradleProperty("intellijPlatformVersion")
 
 intellijPlatform {
 
@@ -42,8 +44,11 @@ tasks {
 tasks {
 
     withType<JavaCompile> {
+
         sourceCompatibility = JvmTarget.JVM_17.target
         targetCompatibility = JvmTarget.JVM_17.target
+
+        options.release.set(17)
     }
 
     withType<KotlinCompile> {
@@ -63,7 +68,7 @@ tasks {
 tasks.register("export") {
     group = "build"
     description = "Builds and Signs plugin"
-    dependsOn("buildPlugin", "signPlugin")
+    dependsOn("clean", "buildPlugin", "signPlugin")
 }
 
 repositories {
@@ -79,9 +84,39 @@ dependencies {
 
     intellijPlatform {
 
-        local("S:\\IntelliJ IDEA\\idea")
+        if (targetPlatformVersion.isPresent) {
+
+            intellijIdea(targetPlatformVersion.get()) {
+
+                useInstaller = false
+
+            }
+
+        } else {
+
+            local("S:\\IntelliJ IDEA\\idea")
+
+        }
 
         testFramework(TestFrameworkType.Platform)
+
+        testFramework(TestFrameworkType.Plugin.Java)
+
+        testBundledPlugin("com.intellij.java")
+
+        if (!targetPlatformVersion.isPresent &&
+            file("S:/IntelliJ IDEA/idea/plugins/platform-testRunner-plugin").isDirectory) {
+
+            testBundledPlugin("intellij.testRunner.plugin")
+            testBundledPlugin("intellij.structureView.plugin")
+            testBundledPlugin("intellij.bookmarks.plugin")
+            testBundledPlugin("intellij.todo.plugin")
+            testBundledPlugin("intellij.structuralSearch.plugin")
+            testBundledPlugin("intellij.libraries.misc.plugin")
+
+            testBundledPlugin("com.intellij.properties")
+
+        }
 
         bundledPlugin("com.intellij.gradle")
         bundledPlugin("org.jetbrains.idea.maven")
