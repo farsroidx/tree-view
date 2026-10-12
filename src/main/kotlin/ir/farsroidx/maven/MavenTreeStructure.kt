@@ -4,24 +4,37 @@ import com.intellij.ide.projectView.ViewSettings
 import com.intellij.ide.projectView.impl.ProjectTreeStructure
 import com.intellij.ide.util.treeView.AbstractTreeNode
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.guessProjectDir
-import com.intellij.psi.PsiManager
 import ir.farsroidx.ViewConfig
 
+/**
+ * Creates the Maven root through the native background project-tree structure.
+ *
+ * @param project the owning IntelliJ project
+ * @param id the stable pane identifier
+ */
 class MavenTreeStructure(project: Project, id: String) : ProjectTreeStructure(project, id) {
 
+    /**
+     * Creates the build-system root node with the supplied project and view settings.
+     *
+     * @param project the owning IntelliJ project
+     * @param viewSettings native project-view display settings
+     *
+     * @return the build-system root node
+     */
     override fun createRoot(project: Project, viewSettings: ViewSettings): AbstractTreeNode<*> {
 
-        val baseDir = project.guessProjectDir()
-            ?: throw IllegalStateException("Project dir not found")
+        return MavenProjectViewNode(ViewConfig(project, viewSettings))
 
-        val psiDirectory = PsiManager.getInstance(project).findDirectory(baseDir)
-            ?: throw IllegalStateException("PSI Directory for project root not found")
-
-        return MavenProjectViewNode(
-            config = ViewConfig(project, viewSettings), psiDirectory
-        )
     }
 
+    /**
+     * Enables background child construction through the native tree infrastructure.
+     *
+     * @param element the platform element being represented
+     *
+     * @return true to enable background tree construction
+     */
     override fun isToBuildChildrenInBackground(element: Any): Boolean = true
+
 }

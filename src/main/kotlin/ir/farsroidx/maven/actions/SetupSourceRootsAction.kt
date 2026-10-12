@@ -1,141 +1,168 @@
-@file:Suppress("DialogTitleCapitalization", "UnsafeVfsRecursion")
-
 package ir.farsroidx.maven.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.module.ModuleManager
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ContentEntry
 import com.intellij.openapi.roots.ModuleRootManager
-import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VfsUtilCore
+import ir.farsroidx.view.SourceRootCollector
+import org.jetbrains.idea.maven.project.MavenProjectsManager
 import org.jetbrains.jps.model.java.JavaResourceRootType
 import org.jetbrains.jps.model.java.JavaSourceRootType
 
+/**
+ * Exposes bounded, additive synchronization of conventional roots for Maven modules.
+ */
 class SetupSourceRootsAction : AnAction("Sync Maven Source Roots") {
 
-    override fun actionPerformed(e: AnActionEvent) {
+    /**
+     * Uses the background action-update thread for Maven availability checks.
+     *
+     * @return the background action-update thread
+     */
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
-        val project = e.project ?: return
+    /**
+     * Enables and shows the action only when the project has imported Maven projects.
+     *
+     * @param event the platform event to inspect
+     */
+    override fun update(event: AnActionEvent) {
+
+        val project = event.project
+
+        event.presentation.isEnabledAndVisible = project != null &&
+            MavenProjectsManager.getInstance(project).hasProjects()
+
+    }
+
+    /**
+     * Synchronizes missing conventional Maven roots for the event project.
+     *
+     * @param event the platform event to inspect
+     */
+    override fun actionPerformed(event: AnActionEvent) {
+
+        val project = event.project ?: return
 
         syncSourceRoots(project)
+
     }
+
 }
 
+/**
+ * Adds missing conventional roots to Maven modules in an undoable write command.
+ *
+ * Existing roots are preserved and repeated calls are idempotent. Model failures are logged
+ * and summarized in a notification; cancellation propagates to the caller.
+ *
+ * @param project the owning IntelliJ project
+ *
+ * @throws com.intellij.openapi.progress.ProcessCanceledException if synchronization is canceled
+ */
 fun syncSourceRoots(project: Project) {
 
-    ApplicationManager.getApplication().runWriteAction {
+    val manager = MavenProjectsManager.getInstance(project)
 
-        val modules = ModuleManager.getInstance(project).modules
+    var failedModules = 0
 
-        var crashed = false
+    var addedRoots = 0
 
-        for (module in modules) {
+    WriteCommandAction.runWriteCommandAction(project, "Sync Maven Source Roots", null, Runnable {
+
+        ModuleManager.getInstance(project).modules.filter { manager.isMavenizedModule(it) }.forEach { module ->
 
             val model = ModuleRootManager.getInstance(module).modifiableModel
 
             try {
 
-                val contentEntries = model.contentEntries
+                model.contentEntries.forEach entryLoop@ { entry ->
 
-                if (contentEntries.isEmpty()) continue
+                    val directory = entry.file ?: return@entryLoop
 
-                for (contentEntry in contentEntries) {
+                    SourceRootCollector.conventional(directory).forEach rootLoop@ { root ->
 
-                    val rootFile = contentEntry.file ?: continue
+                        if (!VfsUtilCore.isAncestor(directory, root.directory, true)) return@rootLoop
 
-                    configureDirectory(contentEntry, rootFile)
-                }
+                        if (model.sourceRoots.any { it == root.directory }) return@rootLoop
 
-                model.commit()
+                        val type = when {
 
-                crashed = false
+                            root.isResource && root.isTest -> JavaResourceRootType.TEST_RESOURCE
 
-            } catch (_: Throwable) {
+                            root.isResource -> JavaResourceRootType.RESOURCE
 
-                model.dispose()
+                            root.isTest -> JavaSourceRootType.TEST_SOURCE
 
-                crashed = true
-            }
-        }
+                            else -> JavaSourceRootType.SOURCE
 
-        ApplicationManager.getApplication().invokeLater {
-            if (crashed) showErrorNotification(project) else showSuccessNotification(project)
-        }
-    }
-}
-
-private fun configureDirectory(contentEntry: ContentEntry, file: VirtualFile) {
-
-    if (file.isDirectory && file.name == "src") {
-        findAndRegisterRoots(contentEntry, file)
-        return
-    }
-
-    if (file.isDirectory) {
-        for (child in file.children) {
-            configureDirectory(contentEntry, child)
-        }
-    }
-}
-
-private fun findAndRegisterRoots(contentEntry: ContentEntry, srcFolder: VirtualFile) {
-
-    for (categoryFolder in srcFolder.children) {
-
-        val isTest = categoryFolder.name.equals("test", ignoreCase = true)
-        val isMain = categoryFolder.name.equals("main", ignoreCase = true)
-
-        if (isMain || isTest) {
-
-            for (folder in categoryFolder.children) {
-
-                when (folder.name.lowercase()) {
-
-                    "java", "kotlin" -> {
-
-                        val rootType = if (isTest) JavaSourceRootType.TEST_SOURCE else JavaSourceRootType.SOURCE
-
-                        if (!contentEntry.sourceFolders.any { it.file == folder }) {
-                            contentEntry.addSourceFolder(folder, rootType)
                         }
+
+                        entry.addSourceFolder(root.directory, type)
+
+                        addedRoots++
+
                     }
 
-                    "resources" -> {
-
-                        val rootType = if (isTest) JavaResourceRootType.TEST_RESOURCE else JavaResourceRootType.RESOURCE
-
-                        if (!contentEntry.sourceFolders.any { it.file == folder }) {
-                            contentEntry.addSourceFolder(folder, rootType)
-                        }
-                    }
                 }
+
+                if (model.isChanged) {
+
+                    model.commit()
+
+                }
+
+            } catch (exception: ProcessCanceledException) {
+
+                throw exception
+
+            } catch (exception: Exception) {
+
+                LOG.warn("Failed to synchronize source roots for module ${module.name}.", exception)
+
+                failedModules++
+
+            } finally {
+
+                if (!model.isDisposed) {
+
+                    model.dispose()
+
+                }
+
             }
+
         }
+
+    })
+
+    val type = if (failedModules == 0) NotificationType.INFORMATION else NotificationType.WARNING
+
+    val content = if (failedModules == 0) {
+
+        "Maven source roots synchronized. Added $addedRoots missing roots."
+
+    } else {
+
+        "Source root synchronization failed for $failedModules modules. See the IDE log for details."
+
     }
-}
-
-private fun showSuccessNotification(project: Project) {
-
-    val title = "Sync Completed"
-    val content = "Maven source and resource roots synchronized <b>Successfully</b>! 🚀"
 
     NotificationGroupManager.getInstance()
-        .getNotificationGroup("MavenSourceRootsGroup")
-        .createNotification(title, content, NotificationType.INFORMATION)
+        .getNotificationGroup(NOTIFICATION_GROUP)
+        .createNotification("Source Root Sync", content, type)
         .notify(project)
+
 }
 
-private fun showErrorNotification(project: Project) {
+private const val NOTIFICATION_GROUP = "MavenSourceRootsGroup"
 
-    val title = "Sync Failed"
-    val content = "An error occurred during synchronization. 🛠️❌"
-
-    NotificationGroupManager.getInstance()
-        .getNotificationGroup("MavenSourceRootsGroup")
-        .createNotification(title, content, NotificationType.ERROR)
-        .notify(project)
-}
+private val LOG = Logger.getInstance(SetupSourceRootsAction::class.java)

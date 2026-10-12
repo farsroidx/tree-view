@@ -2,97 +2,142 @@ package ir.farsroidx.files
 
 import com.intellij.ide.projectView.ProjectView
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.FileStatusListener
-import com.intellij.openapi.vcs.FileStatusManager
-import com.intellij.openapi.vfs.AsyncFileListener
-import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.roots.ModuleRootEvent
+import com.intellij.openapi.roots.ModuleRootListener
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import ir.farsroidx.maven.MavenProjectViewPane
-import kotlinx.coroutines.*
-import kotlin.time.Duration.Companion.milliseconds
+import com.intellij.util.ui.update.MergingUpdateQueue
+import com.intellij.util.ui.update.Update
+import ir.farsroidx.view.BuildProjectViewPane
 
+/**
+ * Coalesces structural, module-root, and import events into disposable pane refreshes.
+ *
+ * Document analysis and file colors remain managed by the native project view.
+ *
+ * @param project the owning IntelliJ project
+ */
 @Service(Service.Level.PROJECT)
 class UniversalFileWatcher(private val project: Project) : Disposable {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val eventScope = FileEventScope(project)
 
-    private var refreshJob: Job? = null
+    private val refreshQueue = MergingUpdateQueue(
+        "TreeView.Structure",
+        REFRESH_DELAY,
+        true,
+        null,
+        this
+    )
 
     init {
 
-        FileStatusManager.getInstance(project).addFileStatusListener(
-            object : FileStatusListener {
-                override fun fileStatusesChanged() { scheduleRefresh() }
-                override fun fileStatusChanged(vFile: VirtualFile) { scheduleRefresh() }
-            }, this
-        )
+        val connection = project.messageBus.connect(this)
 
-        VirtualFileManager.getInstance().addAsyncFileListener(object : AsyncFileListener {
+        connection.subscribe(
+            ModuleRootListener.TOPIC,
+            object : ModuleRootListener {
 
-            override fun prepareChange(events: List<VFileEvent>): AsyncFileListener.ChangeApplier? {
+                /**
+                 * Schedules a structural refresh after the module-root model changes.
+                 *
+                 * @param event the platform event to inspect
+                 */
+                override fun rootsChanged(event: ModuleRootEvent) {
 
-                val shouldRefresh = events.any { event ->
+                    scheduleRefresh()
 
-                    val path = event.path
-
-                    path.endsWith("pom.xml") ||
-                    path.contains("/src/")   ||
-                    path.endsWith(".java")   ||
-                    path.endsWith(".kt")     ||
-                    path.endsWith(".kts")    ||
-                    path.endsWith(".xml")    ||
-                    path.endsWith(".css")    ||
-                    path.endsWith(".js")     ||
-                    path.endsWith(".html")   ||
-                    path.endsWith(".txt")    ||
-                    path.endsWith(".md")     ||
-                    path.endsWith(".properties")
                 }
 
-                if (!shouldRefresh) return null
+            }
+        )
 
-                return object : AsyncFileListener.ChangeApplier {
+        connection.subscribe(
+            ProjectDataImportListener.TOPIC,
+            object : ProjectDataImportListener {
 
-                    override fun afterVfsChange() {
+                /**
+                 * Schedules a structural refresh after external project import completes.
+                 *
+                 * @param projectPath the imported external project path
+                 */
+                override fun onImportFinished(projectPath: String?) {
+
+                    scheduleRefresh()
+
+                }
+
+            }
+        )
+
+        connection.subscribe(
+            VirtualFileManager.VFS_CHANGES,
+            object : BulkFileListener {
+
+                /**
+                 * Schedules one merged refresh when a VFS batch contains relevant structural changes.
+                 *
+                 * @param events the completed VFS event batch
+                 */
+                override fun after(events: List<VFileEvent>) {
+
+                    if (events.any { eventScope.shouldRefresh(it) }) {
+
                         scheduleRefresh()
+
                     }
+
                 }
 
-            }}, this
+            }
         )
+
     }
 
+    /**
+     * Coalesces pending structural refreshes and preserves native tree state.
+     *
+     * Disposed projects are ignored; refresh work is scheduled rather than performed immediately.
+     */
     private fun scheduleRefresh() {
 
-        refreshJob?.cancel()
+        if (project.isDisposed) return
 
-        refreshJob = scope.launch {
+        refreshQueue.queue(
+            Update.create(REFRESH_ID) {
 
-            delay(300.milliseconds)
+                if (!project.isDisposed) {
 
-            if (project.isDisposed) return@launch
+                    val projectView = ProjectView.getInstance(project)
 
-            withContext(Dispatchers.EDT) {
+                    projectView.paneIds.mapNotNull { projectView.getProjectViewPaneById(it) }
+                        .filterIsInstance<BuildProjectViewPane>()
+                        .forEach { it.scheduleRefresh() }
 
-                if (project.isDisposed) return@withContext
+                }
 
-                val pane = ProjectView.getInstance(project)
-                    .getProjectViewPaneById(MavenProjectViewPane.PANE_ID) as? MavenProjectViewPane
-                    ?: return@withContext
-
-                pane.refreshTree()
-
-                pane.tree?.revalidate()
-                pane.tree?.repaint()
             }
-        }
+        )
+
     }
 
+    /**
+     * Ends the service lifetime; registered queues and message-bus connections dispose with this owner.
+     */
     override fun dispose() {
-        scope.cancel()
+
     }
+
+    companion object {
+
+        private const val REFRESH_DELAY = 150
+
+        private const val REFRESH_ID = "TreeView.Structure"
+
+    }
+
 }

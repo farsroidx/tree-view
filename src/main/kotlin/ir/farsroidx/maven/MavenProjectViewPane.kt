@@ -1,286 +1,104 @@
 package ir.farsroidx.maven
 
 import com.intellij.ide.SelectInTarget
-import com.intellij.ide.projectView.impl.AbstractProjectViewPane
-import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
-import com.intellij.ide.util.treeView.AbstractTreeNode
-import com.intellij.ide.util.treeView.TreeState
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.ActionPlaces
-import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.ide.util.treeView.AbstractTreeStructureBase
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.util.ActionCallback
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiManager
-import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.PopupHandler
-import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.tree.AsyncTreeModel
-import com.intellij.ui.tree.StructureTreeModel
-import com.intellij.util.ui.UIUtil
 import icons.MavenIcons
-import ir.farsroidx.files.UniversalFileListener
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import org.jdom.Element
+import ir.farsroidx.view.BuildProjectViewPane
 import org.jetbrains.idea.maven.project.MavenProjectsManager
-import java.awt.BorderLayout
-import javax.swing.*
+import javax.swing.Icon
 
-class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPane(project) {
-
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    private var structureModel: StructureTreeModel<*>? = null
-
-    private var restoredStateFromXml: TreeState? = null
-
-    private var isInitialRestorationDone = false
-
-    private val cardLayout = java.awt.CardLayout()
-
-    private val containerPanel = JPanel(cardLayout)
+/**
+ * Registers the Maven pane and refreshes it after Maven activation and imports.
+ *
+ * @param project the owning IntelliJ project
+ */
+class MavenProjectViewPane(project: Project) : BuildProjectViewPane(project) {
 
     init {
 
-        myTreeStructure = MavenTreeStructure(project, PANE_ID)
+        MavenProjectsManager.getInstance(project).addManagerListener(
+            object : MavenProjectsManager.Listener {
 
-        PsiManager.getInstance(project)
-            .addPsiTreeChangeListener(UniversalFileListener(project) { event, type ->
+                /**
+                 * Schedules a refresh when Maven support becomes active.
+                 */
+                override fun activated() {
 
-                if (type == UniversalFileListener.EventType.CHILDREN_CHANGED ||
-                    type == UniversalFileListener.EventType.ADDED ||
-                    type == UniversalFileListener.EventType.REMOVED) {
+                    scheduleRefresh()
 
-                    val psiFile = event.file
-
-                    if (psiFile != null) {
-
-                        val documentManager = PsiDocumentManager.getInstance(project)
-
-                        val document = documentManager.getDocument(psiFile)
-
-                        if (document != null) {
-
-                            ApplicationManager.getApplication().invokeLater {
-
-                                if (project.isDisposed) return@invokeLater
-
-                                documentManager.performLaterWhenAllCommitted {
-                                    refreshTree()
-                                }
-                            }
-                        }
-                    }
-
-                    refreshTree()
                 }
 
-            }, this)
+                /**
+                 * Schedules a refresh after Maven module import completes.
+                 */
+                override fun projectImportCompleted() {
+
+                    scheduleRefresh()
+
+                }
+
+            },
+            this
+        )
+
     }
 
+    /**
+     * Returns the stable pane identifier used by persisted settings and Select In actions.
+     *
+     * @return the persisted pane identifier
+     */
     override fun getId(): String = PANE_ID
 
+    /**
+     * Returns the pane title displayed in the project-view selector.
+     *
+     * @return the visible pane title
+     */
     override fun getTitle(): String = PANE_NAME
 
+    /**
+     * Returns the build-system icon displayed for this pane.
+     *
+     * @return the build-system pane icon
+     */
     override fun getIcon(): Icon = MavenIcons.MavenProject
 
-    override fun createSelectInTarget(): SelectInTarget = MavenSelectInTarget(project, PANE_ID)
-
+    /**
+     * Returns the native display priority for this pane or selection target.
+     *
+     * @return the platform display priority
+     */
     override fun getWeight(): Int = PANE_WEIGHT
 
+    /**
+     * Creates the native Select In target bound to this pane identifier.
+     *
+     * @return the selection target for this pane
+     */
+    override fun createSelectInTarget(): SelectInTarget = MavenSelectInTarget(myProject, PANE_ID)
+
+    /**
+     * Creates the build-system tree structure using native project-view settings.
+     *
+     * @return the build-system-specific native tree structure
+     */
+    override fun createStructure(): AbstractTreeStructureBase = MavenTreeStructure(myProject, PANE_ID)
+
+    /**
+     * Returns whether linked build metadata or conventional build files make this pane applicable.
+     *
+     * @return true when this project has applicable build metadata or files
+     */
     override fun isInitiallyVisible(): Boolean {
-        return try { isMavenProjectSmart(project) } catch (_: Exception) { true }
-    }
 
-    override fun createComponent(): JComponent {
+        val manager = MavenProjectsManager.getInstance(myProject)
 
-        val treeStructure = myTreeStructure
+        return manager.isMavenizedProject || manager.hasProjects() ||
+            myProject.guessProjectDir()?.findChild("pom.xml") != null
 
-        val structureModel = StructureTreeModel(treeStructure, Comparator { node1, node2 ->
-
-            if (node1 is AbstractTreeNode<*> && node2 is AbstractTreeNode<*>) {
-
-                val isRootLevel1 = node1.parent == null || node1.parent?.value is Project
-                val isRootLevel2 = node2.parent == null || node2.parent?.value is Project
-
-                if (isRootLevel1 || isRootLevel2) return@Comparator 0
-
-                val isDir1 = node1 is PsiDirectoryNode
-                val isDir2 = node2 is PsiDirectoryNode
-
-                if (isDir1 != isDir2) return@Comparator if (isDir1) -1 else 1
-
-                val name1 = node1.name?.lowercase() ?: ""
-                val name2 = node2.name?.lowercase() ?: ""
-
-                return@Comparator name1.compareTo(name2)
-            }
-
-            0
-
-        }, this)
-
-        this.structureModel = structureModel
-
-        val asyncTreeModel = AsyncTreeModel(structureModel, this)
-
-        val tree = MavenProjectViewTree(project, asyncTreeModel)
-
-        val actionGroup = ActionManager.getInstance()
-            .getAction("ProjectViewPopupMenu") as? DefaultActionGroup
-
-        if (actionGroup != null) {
-
-            PopupHandler.installPopupMenu(tree, actionGroup, ActionPlaces.PROJECT_VIEW_POPUP)
-        }
-
-        this.myTree = tree
-
-        val loadingPanel = JPanel(BorderLayout()).apply {
-
-            val loadingLabel = JLabel("Loading Maven Tree...", SwingConstants.CENTER).apply {
-                icon = AnimatedIcon.Default.INSTANCE
-                foreground = UIUtil.getInactiveTextColor()
-            }
-
-            add(loadingLabel, BorderLayout.CENTER)
-        }
-
-        val scrollPane = ScrollPaneFactory.createScrollPane(tree)
-
-        containerPanel.removeAll()
-
-        containerPanel.add(loadingPanel, CARD_LOADING)
-        containerPanel.add(scrollPane, CARD_TREE)
-
-        if (isInitialRestorationDone) {
-            cardLayout.show(containerPanel, CARD_TREE)
-        } else {
-            cardLayout.show(containerPanel, CARD_LOADING)
-        }
-
-        ApplicationManager.getApplication().invokeLater {
-
-            if (!project.isDisposed) {
-
-                refreshTree()
-            }
-        }
-
-        return containerPanel
-    }
-
-    override fun updateFromRoot(restoreExpandedPaths: Boolean): ActionCallback {
-
-        val callback = ActionCallback()
-
-        val model = structureModel
-
-        if (model != null) {
-
-            model.invalidateAsync()
-
-            callback.setDone()
-
-        } else callback.setDone()
-
-        return callback
-    }
-
-    override fun select(element: Any?, file: VirtualFile?, requestFocus: Boolean) {
-
-    }
-
-    override fun writeExternal(element: Element) {
-        super.writeExternal(element)
-
-        val state = saveState()
-
-        if (state != null) {
-
-            val stateElement = Element("TreeState")
-
-            state.writeExternal(stateElement)
-
-            element.addContent(stateElement)
-        }
-    }
-
-    override fun readExternal(element: Element) {
-        super.readExternal(element)
-
-        val stateElement = element.getChild("TreeState")
-
-        if (stateElement != null) {
-            restoredStateFromXml = TreeState.createFrom(stateElement)
-        }
-    }
-
-    private fun isMavenProjectSmart(project: Project): Boolean {
-
-        val mavenManager = MavenProjectsManager.getInstance(project)
-
-        if (mavenManager.isMavenizedProject || mavenManager.hasProjects()) return true
-
-        return project.guessProjectDir()?.findChild("pom.xml")?.exists() == true
-    }
-
-    fun refreshTree() {
-
-        val model = structureModel ?: return
-        val tree = myTree ?: return
-
-        val state = if (!isInitialRestorationDone && restoredStateFromXml != null) {
-            restoredStateFromXml
-        } else {
-            saveState()
-        }
-
-        model.invalidateAsync()
-
-        ApplicationManager.getApplication().invokeLater {
-
-            if (project.isDisposed) return@invokeLater
-
-            state?.let { restoreState(it) }
-
-            val treeModel = tree.model
-            val root = treeModel.root
-
-            val hasNodes = root != null && treeModel.getChildCount(root) > 0
-
-            val mavenManager = MavenProjectsManager.getInstance(project)
-
-            val isMavenReady = mavenManager.isInitialized && (hasNodes || !mavenManager.hasProjects())
-
-            if (isMavenReady) {
-
-                if (!isInitialRestorationDone) {
-                    isInitialRestorationDone = true
-                    restoredStateFromXml = null
-                }
-
-                cardLayout.show(containerPanel, CARD_TREE)
-            }
-
-            tree.revalidate()
-            tree.repaint()
-        }
-    }
-
-    fun saveState(): TreeState? {
-        val tree = myTree ?: return null
-        return TreeState.createOn(tree)
-    }
-
-    fun restoreState(state: TreeState?) {
-        val tree = myTree ?: return
-        state?.applyTo(tree)
     }
 
     companion object {
@@ -291,9 +109,6 @@ class MavenProjectViewPane(private val project: Project) : AbstractProjectViewPa
 
         const val PANE_WEIGHT = 50
 
-        private const val CARD_LOADING = "LOADING"
-
-        private const val CARD_TREE = "TREE"
-
     }
+
 }

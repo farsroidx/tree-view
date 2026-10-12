@@ -1,71 +1,39 @@
 package ir.farsroidx.maven
 
-import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
-import com.intellij.ide.projectView.impl.nodes.PsiFileNode
-import com.intellij.ide.util.treeView.AbstractTreeNode
-import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiNamedElement
-import ir.farsroidx.ViewConfig
+import ir.farsroidx.view.model.ModuleOrder
 import org.jetbrains.idea.maven.project.MavenProject
 
+/**
+ * Returns Maven projects sorted by root status, farsroidx.order, and module name.
+ *
+ * Unread or invalid numeric priorities are treated as absent.
+ *
+ * @param rootMavenProject optional root project placed before other modules
+ *
+ * @return a new list in root, priority, and name order
+ */
 fun List<MavenProject>.sortingByOrder(rootMavenProject: MavenProject? = null): List<MavenProject> {
 
-    return this.sortedWith { a, b ->
+    return sortedBy { project ->
 
-        if (rootMavenProject != null) {
-            if (a == rootMavenProject) return@sortedWith -1
-            if (b == rootMavenProject) return@sortedWith 1
-        }
+        ModuleOrder(
+            if (project.isNew) project.directoryFile.name else {
 
-        val orderA = a.properties.getProperty("farsroidx.order")?.toLongOrNull()
-        val orderB = b.properties.getProperty("farsroidx.order")?.toLongOrNull()
+                project.mavenId.artifactId ?: project.name ?: project.directoryFile.name
 
-        val nameA = a.mavenId.artifactId ?: a.name ?: ""
-        val nameB = b.mavenId.artifactId ?: b.name ?: ""
+            },
+            if (project.lastReadStamp == UNREAD_PROJECT_STAMP || project.hasReadingErrors()) null else {
 
-        when {
+                project.properties.getProperty(MODULE_ORDER_PROPERTY)?.toLongOrNull()
 
-            orderA != null && orderB != null -> {
+            },
+            project == rootMavenProject
+        )
 
-                val orderCompare = orderA.compareTo(orderB)
-
-                if (orderCompare != 0) orderCompare else {
-                    nameA.compareTo(nameB, ignoreCase = true)
-                }
-            }
-
-            orderA != null -> -1
-
-            orderB != null -> 1
-
-            else -> nameA.compareTo(nameB, ignoreCase = true)
-        }
     }
+
 }
 
-fun PsiElement.notNullChildren(config: ViewConfig, subProjects: Set<String> = setOf()): List<AbstractTreeNode<*>> {
+private const val MODULE_ORDER_PROPERTY = "farsroidx.order"
 
-    return this.children.mapNotNull { psiElem ->
-
-        val name = (psiElem as? PsiNamedElement)?.name ?: return@mapNotNull null
-
-        if (
-            name == "src" ||
-            name == "target" ||
-            name == "pom.xml" ||
-            name.startsWith(".") ||
-            name.endsWith(".iml") ||
-            subProjects.contains(name)
-        ) return@mapNotNull null
-
-        val node: AbstractTreeNode<*>? = when (psiElem) {
-            is PsiDirectory -> PsiDirectoryNode(config.project, psiElem, config.viewSettings)
-            is PsiFile -> PsiFileNode(config.project, psiElem, config.viewSettings)
-            else -> null
-        }
-
-        node
-    }
-}
+internal const val UNREAD_PROJECT_STAMP = 0L

@@ -1,321 +1,184 @@
 package ir.farsroidx.maven
 
-import com.intellij.icons.AllIcons
-import com.intellij.ide.projectView.PresentationData
-import com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode
-import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
-import com.intellij.ide.util.treeView.AbstractTreeNode
-import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.ide.projectView.ProjectViewNode
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiManager
-import com.intellij.ui.SimpleTextAttributes
 import icons.MavenIcons
 import ir.farsroidx.ViewConfig
-import ir.farsroidx.maven.nodes.MavenPackageNode
 import ir.farsroidx.maven.nodes.MavenPomNode
-import ir.farsroidx.maven.nodes.MavenVirtualFolderNode
-import ir.farsroidx.withTooltip
+import ir.farsroidx.view.SourceRootCollector
+import ir.farsroidx.view.model.ModuleLayout
+import ir.farsroidx.view.model.SourceRoot
+import ir.farsroidx.view.nodes.BuildFilesNode
+import ir.farsroidx.view.nodes.BuildProjectNode
+import org.jetbrains.idea.maven.project.MavenProject
 import org.jetbrains.idea.maven.project.MavenProjectsManager
-import javax.swing.Icon
 
-class MavenProjectViewNode(private val config: ViewConfig, psiDirectory: PsiDirectory) : ProjectViewProjectNode(
-    config.project, config.viewSettings
-) {
+/**
+ * Adapts non-ignored Maven projects, imported roots, and Maven metadata to the shared tree model.
+ *
+ * @param config the project and native view settings
+ */
+class MavenProjectViewNode(config: ViewConfig) : BuildProjectNode(config) {
 
-    private var rootDirectory: PsiDirectory = psiDirectory
+    /**
+     * Returns distinct build-module layouts with imported roots, fallback roots, and hidden outputs.
+     *
+     * @return ordered, physically distinct module layouts
+     */
+    override fun collectLayouts(): List<ModuleLayout> {
 
-    override fun contains(vFile: VirtualFile): Boolean {
-        return VfsUtilCore.isAncestor(rootDirectory.virtualFile, vFile, true)
-    }
+        val manager = MavenProjectsManager.getInstance(project)
 
-    override fun getChildren(): Collection<AbstractTreeNode<*>> {
+        val root = manager.rootProjects.firstOrNull()
 
-        val mavenManager = MavenProjectsManager.getInstance(project)
+        return manager.nonIgnoredProjects.filter { mavenProject ->
 
-        if (!mavenManager.isMavenizedProject) {
+            mavenProject.file.isValid && mavenProject.directoryFile.isValid
 
-            return listOf(
-                PsiDirectoryNode(
-                    project, rootDirectory, settings
-                )
-            )
-        }
+        }.sortingByOrder(root).map { mavenProject ->
 
-        val rootMavenProject = mavenManager.rootProjects.firstOrNull()
-            ?: return listOf(PsiDirectoryNode(project, rootDirectory, settings))
+            val importedRoots = manager.findModule(mavenProject)?.let { module ->
 
-        val allProjects = mavenManager.projects
+                SourceRootCollector.collect(listOf(module))
 
-        val subProjects = allProjects.filter { it != rootMavenProject }
+            }.orEmpty()
 
-        val resultNodes = mutableListOf<AbstractTreeNode<*>>()
+            val roots = importedRoots + modelRoots(mavenProject) +
+                SourceRootCollector.conventional(mavenProject.directoryFile)
 
-        val subProjectNames = subProjects
-            .map { it.directoryFile.name }
-            .toSet()
+            ModuleLayout(
+                if (mavenProject.isNew) mavenProject.directoryFile.name else {
 
-        // ===============================
-        // Maven Poms Folder
-        // ===============================
+                    mavenProject.mavenId.artifactId ?: mavenProject.directoryFile.name
 
-        val pomsIcon = MavenIcons.MavenProject.withTooltip("Maven Poms")
-
-        val pomsVirtualFolder = MavenVirtualFolderNode(config, "Maven Poms", pomsIcon) {
-
-            allProjects.sortingByOrder(rootMavenProject).mapNotNull { mavenProj ->
-
-                val psiFile = PsiManager.getInstance(project).findFile(mavenProj.file)
-
-                psiFile?.let { psiFile ->
-
-                    val label = (mavenProj.mavenId.artifactId ?: mavenProj.name ?: "unknown")
-                        .replace(" ", "-")
-                        .lowercase()
-
-                    MavenPomNode(config, psiFile, label, isRoot = mavenProj == rootMavenProject)
-                }
-            }
-        }
-
-        val rootHasSrc = rootDirectory.virtualFile.findChild("src")?.exists() == true
-
-        if (subProjects.isEmpty()) {
-
-            // =================================
-            // single module
-            // =================================
-
-            val rootProjectName = (rootMavenProject.mavenId.artifactId ?: project.name)
-
-            val singleModuleNode = virtualFolderNode(
-                icon = AllIcons.Modules.SourceRoot,
-                nodeName = rootProjectName,
-                isRootProject = true,
-                baseDirectory = rootDirectory.virtualFile,
-                subProjectNames = subProjectNames
+                },
+                mavenProject.directoryFile,
+                roots.distinctBy { it.directory },
+                setOf(mavenProject.file),
+                outputDirectories(mavenProject),
+                showAdditionalFiles = mavenProject !in manager.rootProjects,
+                isVisible = roots.isNotEmpty() || manager.getModules(mavenProject).isEmpty()
             )
 
-            resultNodes.add(singleModuleNode)
-            resultNodes.add(pomsVirtualFolder)
-
-        } else {
-
-            // =================================
-            // multi module
-            // =================================
-
-            if (rootHasSrc) {
-
-                val rootName = (rootMavenProject.mavenId.artifactId ?: project.name)
-                    .replace(" ", "-")
-                    .lowercase()
-
-                val rootSrcNode = virtualFolderNode(
-                    icon = AllIcons.Modules.SourceRoot,
-                    nodeName = rootName,
-                    isRootProject = true,
-                    baseDirectory = rootDirectory.virtualFile,
-                    subProjectNames = subProjectNames
-                )
-
-                resultNodes.add(rootSrcNode)
-            }
-
-            for (subProject in subProjects.sortingByOrder()) {
-
-                val moduleDir = subProject.directoryFile
-
-                val nodeName = (subProject.mavenId.artifactId ?: moduleDir.name)
-                    .replace(" ", "-")
-                    .lowercase()
-
-                val moduleNode = virtualFolderNode(
-                    icon = AllIcons.Modules.SourceRoot,
-                    nodeName = nodeName,
-                    isRootProject = false,
-                    baseDirectory = moduleDir,
-                    subProjectNames = subProjectNames
-                )
-
-                resultNodes.add(moduleNode)
-            }
-
-            resultNodes.add(pomsVirtualFolder)
         }
 
-        return resultNodes
     }
 
-    @Suppress("SameParameterValue")
-    private fun virtualFolderNode(
-        icon: Icon,
-        nodeName: String,
-        isRootProject: Boolean,
-        baseDirectory: VirtualFile,
-        subProjectNames: Set<String>
-    ): AbstractTreeNode<*> {
+    /**
+     * Resolves Maven output directories, using the conventional target directory before metadata is ready.
+     *
+     * @param mavenProject the Maven project supplying metadata
+     *
+     * @return existing Maven output directories to exclude
+     */
+    private fun outputDirectories(mavenProject: MavenProject): Set<VirtualFile> {
 
-        return MavenVirtualFolderNode(config, nodeName, icon.withTooltip(nodeName)) {
+        if (mavenProject.lastReadStamp == UNREAD_PROJECT_STAMP || mavenProject.hasReadingErrors()) {
 
-            val childrenNodes = mutableListOf<AbstractTreeNode<*>>()
+            return setOfNotNull(mavenProject.directoryFile.findChild(DEFAULT_OUTPUT_DIRECTORY))
+
+        }
+
+        return listOf(
+            mavenProject.buildDirectory,
+            mavenProject.outputDirectory,
+            mavenProject.testOutputDirectory
+        ).mapNotNull { findDirectory(it) }.toSet()
+
+    }
+
+    /**
+     * Creates the synthetic build-file group with concrete, selectable PSI-file children.
+     *
+     * @param layouts the ordered build-module layouts
+     *
+     * @return the synthetic group containing selectable build-file nodes
+     */
+    override fun buildFilesNode(layouts: List<ModuleLayout>): ProjectViewNode<*> {
+
+        val files = layouts.flatMap { it.buildFiles }
+
+        return BuildFilesNode(config, "Maven Poms", MavenIcons.MavenProject, files) {
+
+            val manager = MavenProjectsManager.getInstance(project)
+
+            val roots = manager.rootProjects.map { it.file }.toSet()
 
             val psiManager = PsiManager.getInstance(project)
 
-            val mainCodeDirectories     = mutableListOf<PsiDirectory>()
-            val mainResourceDirectories = mutableListOf<PsiDirectory>()
+            files.mapNotNull { file ->
 
-            val testCodeDirectories     = mutableListOf<PsiDirectory>()
-            val testResourceDirectories = mutableListOf<PsiDirectory>()
+                val psiFile = psiManager.findFile(file) ?: return@mapNotNull null
 
-            val srcDir = baseDirectory.findChild("src")
+                val label = layouts.firstOrNull { file in it.buildFiles }?.name.orEmpty()
 
-            if (srcDir != null) {
+                MavenPomNode(config, psiFile, label, file in roots)
 
-                // دستی و مطمئن مسیرهای src/main و src/test را بررسی می‌کنیم
-                fun scanDirectory(parentDir: VirtualFile, isTest: Boolean) {
-
-                    val javaDir   = parentDir.findChild("java")
-                    val kotlinDir = parentDir.findChild("kotlin")
-                    val resDir    = parentDir.findChild("resources")
-
-                    javaDir?.let { dir -> psiManager.findDirectory(dir) }?.let { dir ->
-                        if (isTest) testCodeDirectories.add(dir) else mainCodeDirectories.add(dir)
-                    }
-
-                    kotlinDir?.let { dir -> psiManager.findDirectory(dir) }?.let { dir ->
-                        if (isTest) testCodeDirectories.add(dir) else mainCodeDirectories.add(dir)
-                    }
-
-                    resDir?.let { dir -> psiManager.findDirectory(dir) }?.let { dir ->
-                        if (isTest) testResourceDirectories.add(dir) else mainResourceDirectories.add(dir)
-                    }
-                }
-
-                srcDir.findChild("main")?.let { dir -> scanDirectory(dir, isTest = false) }
-                srcDir.findChild("test")?.let { dir -> scanDirectory(dir, isTest = true)  }
             }
-
-            val allCodeNodes = mutableListOf<AbstractTreeNode<*>>()
-
-            mainCodeDirectories.forEach { dir ->
-
-                dir.subdirectories.forEach { subDir ->
-
-                    allCodeNodes.add(
-                        compactDirectoryNode(subDir)
-                    )
-                }
-            }
-
-            testCodeDirectories.forEach { dir ->
-
-                dir.subdirectories.forEach { subDir ->
-
-                    allCodeNodes.add(
-                        compactDirectoryNode(subDir, suffix = "(test)")
-                    )
-                }
-            }
-
-            allCodeNodes.sortBy { (it as? MavenPackageNode)?.value?.name?.lowercase() ?: it.name?.lowercase() ?: "" }
-
-            childrenNodes.addAll(allCodeNodes)
-
-            val resourceNodes = mutableListOf<AbstractTreeNode<*>>()
-
-            mainResourceDirectories.forEach {  resDir ->
-                resourceNodes.add(
-                    PsiDirectoryNode(project, resDir, settings).apply {
-                        presentation.apply {
-                            addText(resDir.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
-                            setIcon(AllIcons.Modules.ResourcesRoot)
-                        }
-                    }
-                )
-            }
-
-            testResourceDirectories.forEach { resDir ->
-                resourceNodes.add(
-                    PsiDirectoryNode(project, resDir, settings).apply {
-                        presentation.apply {
-                            addText(resDir.name, SimpleTextAttributes.REGULAR_ATTRIBUTES)
-                            addText(" (test)", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-                            setIcon(AllIcons.Modules.TestResourcesRoot)
-                        }
-                    }
-                )
-            }
-
-            resourceNodes.sortBy { it.name?.lowercase() ?: "" }
-            childrenNodes.addAll(resourceNodes)
-
-            if (!isRootProject) {
-
-                val psiBaseDir = psiManager.findDirectory(baseDirectory)
-
-                if (psiBaseDir != null) {
-
-                    val extraFiles = psiBaseDir.notNullChildren(config, subProjectNames)
-
-                    val sortedExtraFiles = extraFiles.sortedWith(compareBy<AbstractTreeNode<*>> {
-                        if (it is PsiDirectoryNode) 0 else 1
-                    }.thenBy {
-                        it.name?.lowercase() ?: ""
-                    })
-
-                    childrenNodes.addAll(sortedExtraFiles)
-                }
-            }
-
-            childrenNodes
-        }
-    }
-
-    private fun compactDirectoryNode(dir: PsiDirectory, suffix: String = ""): AbstractTreeNode<*> {
-
-        val (directory, packageName) = compactMiddlePackages(dir)
-
-        return MavenPackageNode(
-            config = config,
-            icon = AllIcons.Nodes.ModuleGroup,
-            suffix = suffix,
-            directory = directory,
-            packageLabel = packageName
-        )
-    }
-
-    private fun compactMiddlePackages(directory: PsiDirectory): Pair<PsiDirectory, String> {
-
-        var current = directory
-
-        val parts = mutableListOf<String>()
-
-        while (true) {
-
-            val subDirs = current.subdirectories
-
-            val files = current.files
-
-            if (subDirs.size == 1 && files.isEmpty()) {
-
-                parts.add(current.name)
-
-                current = subDirs[0]
-
-            } else break
-        }
-
-        val name = if (parts.isEmpty()) current.name else {
-
-            parts.joinToString(".") + "." + current.name
 
         }
 
-        return current to name
     }
 
-    override fun update(presentation: PresentationData) {
-        super.update(presentation)
+    /**
+     * Converts Maven source and resource metadata into semantic root descriptions.
+     *
+     * @param mavenProject the Maven project supplying metadata
+     *
+     * @return existing Maven source and resource roots with category metadata
+     */
+    private fun modelRoots(mavenProject: MavenProject): List<SourceRoot> {
+
+        val sources = mavenProject.sources.mapNotNull { source ->
+
+            findDirectory(source)?.let { SourceRoot(it, false, false) }
+
+        }
+
+        val tests = mavenProject.testSources.mapNotNull { source ->
+
+            findDirectory(source)?.let { SourceRoot(it, true, false) }
+
+        }
+
+        val resources = mavenProject.resources.mapNotNull { resource ->
+
+            findDirectory(resource.directory)?.let { SourceRoot(it, false, true) }
+
+        }
+
+        val testResources = mavenProject.testResources.mapNotNull { resource ->
+
+            findDirectory(resource.directory)?.let { SourceRoot(it, true, true) }
+
+        }
+
+        return sources + tests + resources + testResources
+
     }
+
+    /**
+     * Resolves an existing local directory, returning null for missing or blank paths.
+     *
+     * @param path the local filesystem path
+     *
+     * @return the resolved directory, or null when it cannot be resolved
+     */
+    private fun findDirectory(path: String?): VirtualFile? {
+
+        if (path.isNullOrBlank()) return null
+
+        return LocalFileSystem.getInstance().findFileByPath(path.replace('\\', '/'))
+            ?.takeIf { it.isDirectory }
+
+    }
+
+    companion object {
+
+        private const val DEFAULT_OUTPUT_DIRECTORY = "target"
+
+    }
+
 }
