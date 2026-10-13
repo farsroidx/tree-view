@@ -3,6 +3,7 @@ package ir.farsroidx.gradle
 import com.intellij.ide.projectView.ViewSettings
 import com.intellij.ide.projectView.impl.nodes.PsiFileNode
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.ExternalSystemModulePropertyManager
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.ExternalProjectInfo
@@ -16,9 +17,12 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.fixtures.TempDirTestFixture
 import com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl
 import ir.farsroidx.ViewConfig
+import ir.farsroidx.view.GeneratedSourcesSettings
+import ir.farsroidx.view.nodes.PackageNode
 import ir.farsroidx.view.nodes.BuildFilesNode
 import ir.farsroidx.view.nodes.BuildModuleNode
 import org.jetbrains.jps.model.java.JavaSourceRootType
+import org.jetbrains.jps.model.java.JavaSourceRootProperties
 import org.jetbrains.plugins.gradle.settings.GradleProjectSettings
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import org.jetbrains.plugins.gradle.util.GradleConstants
@@ -46,6 +50,8 @@ class GradleProjectViewNodeTest : BasePlatformTestCase() {
     override fun tearDown() {
 
         try {
+
+            project.service<GeneratedSourcesSettings>().showGeneratedSources = false
 
             ApplicationManager.getApplication().runWriteAction {
 
@@ -173,6 +179,60 @@ class GradleProjectViewNodeTest : BasePlatformTestCase() {
         val node = rootNode().children.filterIsInstance<BuildModuleNode>().single()
 
         assertTrue(node.getChildrenImpl().filterIsInstance<PsiFileNode>().any { it.value == source })
+
+    }
+
+    fun testImportedGradleGeneratedPackagesFollowVisibilitySetting() {
+
+        myFixture.addFileToProject("build.gradle.kts", "plugins {}")
+
+        myFixture.addFileToProject("build/generated/sources/com/example/Model.java", "package com.example; public class Model {}")
+
+        val directory = myFixture.tempDirFixture.getFile("")!!
+
+        val generated = myFixture.tempDirFixture.getFile("build/generated/sources")!!
+
+        linkProject()
+
+        ApplicationManager.getApplication().runWriteAction {
+
+            val properties = ExternalSystemModulePropertyManager.getInstance(module)
+
+            properties.setExternalId(GradleConstants.SYSTEM_ID)
+
+            properties.setLinkedProjectPath(directory.path)
+
+            val model = ModuleRootManager.getInstance(module).modifiableModel
+
+            try {
+
+                model.addContentEntry(directory).addSourceFolder(
+                    generated,
+                    JavaSourceRootType.SOURCE,
+                    JavaSourceRootProperties("", true)
+                )
+
+                model.commit()
+
+            } finally {
+
+                if (!model.isDisposed) {
+
+                    model.dispose()
+
+                }
+
+            }
+
+        }
+
+        val node = rootNode().children.filterIsInstance<BuildModuleNode>().single()
+
+        assertTrue(node.getChildrenImpl().isEmpty())
+
+        project.service<GeneratedSourcesSettings>().showGeneratedSources = true
+
+        assertTrue(node.getChildrenImpl().filterIsInstance<PackageNode>().single().isGenerated)
 
     }
 

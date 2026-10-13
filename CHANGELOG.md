@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 - 2026-10-13
+
+### Fixed
+
+- Hide generated source roots by default in Maven and Gradle panes, using IntelliJ root metadata rather than directory-name heuristics.
+- Prevent nested generated roots from leaking through ordinary packages or appearing twice when enabled.
+- Synchronize the Gradle project version property with the release version.
+
+### Added
+
+- A Generated Sources toggle under Appearance > Show, shared by both build-system panes and persisted per project.
+- A `(generated)` label on visible generated packages and root files, preserving `(test)` on generated test content.
+- Nine regression tests covering metadata classification, both build-system adapters, native tree refresh and selection, nested roots, menu registration, and preference persistence.
+
 ## 1.2.0 - 2026-10-12
 
 ### Added

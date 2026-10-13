@@ -14,5 +14,6 @@ data class SourceRoot(
     val directory: VirtualFile,
     val isTest: Boolean,
     val isResource: Boolean,
-    val packagePrefix: String = ""
+    val packagePrefix: String = "",
+    val isGenerated: Boolean = false
 )

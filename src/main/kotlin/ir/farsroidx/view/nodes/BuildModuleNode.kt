@@ -4,11 +4,13 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.projectView.PresentationData
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
 import com.intellij.ide.util.treeView.AbstractTreeNode
+import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
 import com.intellij.ui.SimpleTextAttributes
 import ir.farsroidx.ViewConfig
+import ir.farsroidx.view.GeneratedSourcesSettings
 import ir.farsroidx.view.model.ModuleLayout
 
 /**
@@ -37,13 +39,29 @@ class BuildModuleNode(
 
         val roots = layout.sourceRoots.filter { it.directory.isValid }.sortedBy { it.isTest }
 
-        roots.filterNot { it.isResource }.forEach { root ->
+        val showGeneratedSources = config.project.service<GeneratedSourcesSettings>().showGeneratedSources
 
-            children.addAll(SourceNodes.children(config, root))
+        val hiddenGeneratedRoots = if (showGeneratedSources) {
+
+            emptySet()
+
+        } else {
+
+            roots.filter { it.isGenerated }.map { it.directory }.toSet()
 
         }
 
-        roots.filter { it.isResource }.forEach { root ->
+        val visibleRoots = roots.filter { it.directory !in hiddenGeneratedRoots }
+
+        visibleRoots.filterNot { it.isResource }.forEach { root ->
+
+            val otherRoots = roots.filter { it.directory != root.directory }.map { it.directory }.toSet()
+
+            children.addAll(SourceNodes.children(config, root, otherRoots))
+
+        }
+
+        visibleRoots.filter { it.isResource }.forEach { root ->
 
             SourceNodes.resourceNode(config, root)?.let { children.add(it) }
 

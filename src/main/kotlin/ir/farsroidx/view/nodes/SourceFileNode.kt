@@ -16,7 +16,8 @@ import ir.farsroidx.ViewConfig
 class SourceFileNode(
     config: ViewConfig,
     file: PsiFile,
-    val isTest: Boolean
+    val isTest: Boolean,
+    val isGenerated: Boolean = false
 ) : PsiFileNode(config.project, file, config.viewSettings) {
 
     /**
@@ -28,13 +29,23 @@ class SourceFileNode(
 
         super.update(presentation)
 
-        if (isTest) {
+        if (isTest || isGenerated) {
 
             presentation.clearText()
 
             presentation.addText(value?.name.orEmpty(), SimpleTextAttributes.REGULAR_ATTRIBUTES)
 
-            presentation.addText(TEST_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            if (isTest) {
+
+                presentation.addText(TEST_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+
+            }
+
+            if (isGenerated) {
+
+                presentation.addText(GENERATED_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+
+            }
 
         }
 

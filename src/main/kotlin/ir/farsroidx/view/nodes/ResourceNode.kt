@@ -17,7 +17,8 @@ import ir.farsroidx.ViewConfig
 class ResourceNode(
     config: ViewConfig,
     directory: PsiDirectory,
-    val isTest: Boolean
+    val isTest: Boolean,
+    val isGenerated: Boolean = false
 ) : PsiDirectoryNode(config.project, directory, config.viewSettings) {
 
     /**
@@ -40,6 +41,12 @@ class ResourceNode(
         if (isTest) {
 
             presentation.addText(TEST_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+
+        }
+
+        if (isGenerated) {
+
+            presentation.addText(GENERATED_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
 
         }
 

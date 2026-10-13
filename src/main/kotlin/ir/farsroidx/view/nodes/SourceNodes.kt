@@ -2,6 +2,7 @@ package ir.farsroidx.view.nodes
 
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
 import com.intellij.ide.util.treeView.AbstractTreeNode
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiManager
 import ir.farsroidx.ViewConfig
@@ -20,20 +21,24 @@ object SourceNodes {
      *
      * @return the visible child nodes for the supplied root or directory
      */
-    fun children(config: ViewConfig, root: SourceRoot): List<AbstractTreeNode<*>> {
+    fun children(
+        config: ViewConfig,
+        root: SourceRoot,
+        hiddenDirectories: Set<VirtualFile> = emptySet()
+    ): List<AbstractTreeNode<*>> {
 
         val directory = PsiManager.getInstance(config.project).findDirectory(root.directory)
             ?: return emptyList()
 
-        val packages = directory.subdirectories.map { child ->
+        val packages = directory.subdirectories.filterNot { it.virtualFile in hiddenDirectories }.map { child ->
 
-            packageNode(config, child, root)
+            packageNode(config, child, root, hiddenDirectories)
 
         }
 
         val files = directory.files.map { file ->
 
-            SourceFileNode(config, file, root.isTest)
+            SourceFileNode(config, file, root.isTest, root.isGenerated)
 
         }
 
@@ -54,7 +59,7 @@ object SourceNodes {
         val directory = PsiManager.getInstance(config.project).findDirectory(root.directory)
             ?: return null
 
-        return ResourceNode(config, directory, root.isTest)
+        return ResourceNode(config, directory, root.isTest, root.isGenerated)
 
     }
 
@@ -70,7 +75,8 @@ object SourceNodes {
     private fun packageNode(
         config: ViewConfig,
         directory: PsiDirectory,
-        root: SourceRoot
+        root: SourceRoot,
+        hiddenDirectories: Set<VirtualFile>
     ): PackageNode {
 
         var current = directory
@@ -87,7 +93,7 @@ object SourceNodes {
 
             parts.add(current.name)
 
-            val subdirectories = current.subdirectories
+            val subdirectories = current.subdirectories.filterNot { it.virtualFile in hiddenDirectories }
 
             if (subdirectories.size != 1 || current.files.isNotEmpty()) break
 
@@ -95,10 +101,20 @@ object SourceNodes {
 
         }
 
-        return PackageNode(config, current, parts.joinToString("."), root.isTest, directory)
+        return PackageNode(
+            config,
+            current,
+            parts.joinToString("."),
+            root.isTest,
+            directory,
+            root.isGenerated,
+            hiddenDirectories
+        )
 
     }
 
 }
 
 internal const val TEST_SUFFIX = " (test)"
+
+internal const val GENERATED_SUFFIX = " (generated)"

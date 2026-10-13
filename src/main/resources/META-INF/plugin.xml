@@ -2,7 +2,7 @@
 
     <name>Tree View</name>
 
-    <version>1.2.0</version>
+    <version>1.2.1</version>
 
     <id>ir.farsroidx.tree-view</id>
 
@@ -20,6 +20,7 @@
             <li>Source, SourceTest, Resources, ResourcesTest ordering with missing sections omitted.</li>
             <li>Native asynchronous project-view selection, Move/refactoring, drag and drop, VCS colors, and problem updates.</li>
             <li>Compact packages, semantic test highlighting, and persisted tree state.</li>
+            <li>Optional generated-source visibility for Maven and Gradle, disabled by default and saved per project.</li>
             <li>Grouped Maven POMs and Gradle build/settings files with module labels.</li>
             <li>Gradle module properties, conventional version catalogs, and global Gradle User Home properties.</li>
             <li>Module priorities through <code>farsroidx.order</code>: Maven imported properties or Gradle module-local properties.</li>
@@ -43,7 +44,31 @@
 
     </extensions>
 
+    <actions>
+
+        <action id="TreeView.ShowGeneratedSources"
+                class="ir.farsroidx.view.actions.ShowGeneratedSourcesAction"
+                text="Generated Sources">
+
+            <add-to-group group-id="ProjectView.ToolWindow.Appearance.Actions"
+                          anchor="after"
+                          relative-to-action="ProjectView.ShowExcludedFiles"/>
+
+        </action>
+
+    </actions>
+
     <change-notes><![CDATA[
+        <h3>v1.2.1 - Generated Source Visibility Fix</h3>
+        <ul>
+            <li><strong>Fixed:</strong> Generated source roots no longer clutter Maven and Gradle panes by default.</li>
+            <li><strong>Added:</strong> A Generated Sources toggle under Appearance &gt; Show, shared by both panes and saved per project.</li>
+            <li><strong>Improved:</strong> Visible generated packages and root files carry a (generated) label; generated tests retain their (test) label.</li>
+            <li><strong>Fixed:</strong> Nested generated roots stay hidden when disabled and are not duplicated when enabled.</li>
+            <li><strong>Verified:</strong> Regression coverage for imported Maven/Gradle roots, native tree refresh and selection, settings persistence, and menu registration.</li>
+        </ul>
+        <hr>
+
         <h3>v1.2.0 - Gradle Support and Native Tree Integration</h3>
         <ul>
             <li><strong>Added:</strong> Separate Gradle pane for Groovy/Kotlin DSL, imported multi-module builds, and custom source sets.</li>
