@@ -3,6 +3,7 @@ package ir.farsroidx.view
 import com.intellij.icons.AllIcons
 import com.intellij.codeInsight.daemon.impl.WolfTheProblemSolverImpl
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.ide.SelectInTarget
@@ -29,6 +30,7 @@ import ir.farsroidx.view.nodes.BuildFilesNode
 import ir.farsroidx.view.nodes.BuildProjectNode
 import ir.farsroidx.view.nodes.PackageNode
 import org.jetbrains.jps.model.java.JavaSourceRootType
+import org.jetbrains.jps.model.java.JavaSourceRootProperties
 import javax.swing.Icon
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.TreePath
@@ -214,6 +216,48 @@ class BuildProjectViewPaneTest : BasePlatformTestCase() {
 
     }
 
+    fun testGeneratedPackageRemainsSelectableAfterNativeTreeRefresh() {
+
+        val main = myFixture.addFileToProject("src/main/java/com/main/App.java", "package com.main; public class App {}")
+
+        val generated = myFixture.addFileToProject("generated/java/com/example/Model.java", "package com.example; public class Model {}")
+
+        val pane = createPane(true)
+
+        PlatformTestUtil.waitForCallback(pane.selectCB(main, main.virtualFile, false))
+
+        val mainPackage = pane.tree!!.selectionPath.parentPath.lastPathComponent as DefaultMutableTreeNode
+
+        val moduleNode = mainPackage.parent as DefaultMutableTreeNode
+
+        assertFalse(moduleNode.children().asSequence().map { (it as DefaultMutableTreeNode).userObject }
+            .filterIsInstance<PackageNode>().any { it.isGenerated })
+
+        project.service<GeneratedSourcesSettings>().showGeneratedSources = true
+
+        PlatformTestUtil.waitForCallback(pane.updateFromRoot(true))
+
+        PlatformTestUtil.waitForCallback(pane.selectCB(generated, generated.virtualFile, false))
+
+        assertNotNull(pane.tree!!.selectionPath)
+
+        assertTrue(pane.singleSelectedPathUserObjects.orEmpty().filterIsInstance<PackageNode>().single().isGenerated)
+
+        project.service<GeneratedSourcesSettings>().showGeneratedSources = false
+
+        PlatformTestUtil.waitForCallback(pane.updateFromRoot(true))
+
+        PlatformTestUtil.waitForCallback(pane.selectCB(main, main.virtualFile, false))
+
+        val refreshedPackage = pane.tree!!.selectionPath.parentPath.lastPathComponent as DefaultMutableTreeNode
+
+        val refreshedModule = refreshedPackage.parent as DefaultMutableTreeNode
+
+        assertFalse(refreshedModule.children().asSequence().map { (it as DefaultMutableTreeNode).userObject }
+            .filterIsInstance<PackageNode>().any { it.isGenerated })
+
+    }
+
     fun testRefreshCallbackCompletesAfterTheTreeUpdate() {
 
         val file = myFixture.addFileToProject("first.txt", "first")
@@ -273,6 +317,16 @@ class BuildProjectViewPaneTest : BasePlatformTestCase() {
                 model.addContentEntry(directory).addSourceFolder(sourceDirectory, JavaSourceRootType.SOURCE)
 
                 if (withSourceRoots) {
+
+                    directory.findFileByRelativePath("generated/java")?.let { generatedDirectory ->
+
+                        model.contentEntries.single { it.file == directory }.addSourceFolder(
+                            generatedDirectory,
+                            JavaSourceRootType.SOURCE,
+                            JavaSourceRootProperties("", true)
+                        )
+
+                    }
 
                     directory.findFileByRelativePath("src/test/java")?.let { testDirectory ->
 

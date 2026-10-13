@@ -24,6 +24,8 @@ ResourcesTest
 
 These names describe section ordering; packages remain compact nodes. Missing sections are omitted. Native sorting applies within each section. Test labels and backgrounds follow semantic root classification.
 
+Generated source roots are hidden by default in both panes. Enable **Appearance > Show > Generated Sources** in the Project tool window menu to display them. The preference is shared by the Maven and Gradle panes and saved per project. Generated packages and files directly under generated roots carry `(generated)`; generated tests also retain `(test)`. Classification follows imported IntelliJ root metadata, not folder names.
+
 Native PSI nodes support selection, Select In, Move/refactoring, drag and drop, VCS colors, problem presentation, and persisted expansion state. Error presentation follows background analysis without a manual save. Native IDE rules determine allowed move and drop targets.
 
 Upgrading to 1.2.0 preserves plugin and pane identifiers. Legacy tree state is migrated when the pane opens; existing Maven ordering properties remain supported.

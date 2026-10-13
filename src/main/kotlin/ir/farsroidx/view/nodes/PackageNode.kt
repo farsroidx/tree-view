@@ -3,6 +3,7 @@ package ir.farsroidx.view.nodes
 import com.intellij.icons.AllIcons
 import com.intellij.ide.projectView.PresentationData
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
+import com.intellij.ide.util.treeView.AbstractTreeNode
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
@@ -21,11 +22,13 @@ import ir.farsroidx.ViewConfig
  * @param firstDirectory the first physical directory in the compact chain
  */
 class PackageNode(
-    config: ViewConfig,
+    private val config: ViewConfig,
     private val directory: PsiDirectory,
     private val packageLabel: String,
     val isTest: Boolean,
-    private val firstDirectory: PsiDirectory
+    private val firstDirectory: PsiDirectory,
+    val isGenerated: Boolean = false,
+    private val hiddenDirectories: Set<VirtualFile> = emptySet()
 ) : PsiDirectoryNode(config.project, directory, config.viewSettings) {
 
     /**
@@ -63,6 +66,24 @@ class PackageNode(
             presentation.addText(TEST_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
 
         }
+
+        if (isGenerated) {
+
+            presentation.addText(GENERATED_SUFFIX, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+
+        }
+
+    }
+
+    override fun getChildrenImpl(): Collection<AbstractTreeNode<*>> {
+
+        if (hiddenDirectories.any { VfsUtilCore.isAncestor(directory.virtualFile, it, true) }) {
+
+            return ContentDirectoryNode.children(config, directory, hiddenDirectories)
+
+        }
+
+        return super.getChildrenImpl().orEmpty()
 
     }
 

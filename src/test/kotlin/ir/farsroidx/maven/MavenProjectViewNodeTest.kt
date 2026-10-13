@@ -3,16 +3,23 @@ package ir.farsroidx.maven
 import com.intellij.ide.projectView.ViewSettings
 import com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode
 import com.intellij.ide.projectView.impl.nodes.PsiFileNode
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
+import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.fixtures.TempDirTestFixture
 import com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl
 import ir.farsroidx.ViewConfig
+import ir.farsroidx.view.GeneratedSourcesSettings
+import ir.farsroidx.view.nodes.PackageNode
 import ir.farsroidx.maven.nodes.MavenPomNode
 import ir.farsroidx.view.nodes.BuildFilesNode
 import ir.farsroidx.view.nodes.BuildModuleNode
 import org.jetbrains.idea.maven.model.MavenId
 import org.jetbrains.idea.maven.project.MavenProject
 import org.jetbrains.idea.maven.project.MavenProjectsManager
+import org.jetbrains.jps.model.java.JavaSourceRootProperties
+import org.jetbrains.jps.model.java.JavaSourceRootType
 
 class MavenProjectViewNodeTest : BasePlatformTestCase() {
 
@@ -33,6 +40,8 @@ class MavenProjectViewNodeTest : BasePlatformTestCase() {
     override fun tearDown() {
 
         try {
+
+            project.service<GeneratedSourcesSettings>().showGeneratedSources = false
 
             MavenProjectsManager.getInstance(project).projectsTreeForTests.updater()
                 .setRootProjects(emptyList())
@@ -90,6 +99,54 @@ class MavenProjectViewNodeTest : BasePlatformTestCase() {
         val group = root.children.filterIsInstance<BuildFilesNode>().single()
 
         assertEquals(setOf(first.file, second.file), group.children.map { (it as MavenPomNode).virtualFile }.toSet())
+
+    }
+
+    fun testImportedMavenGeneratedPackagesFollowVisibilitySetting() {
+
+        val mavenProject = mavenProject("pom.xml", "root")
+
+        myFixture.addFileToProject("target/generated-sources/annotations/com/example/Model.java", "package com.example; public class Model {}")
+
+        val directory = myFixture.tempDirFixture.getFile("")!!
+
+        val generated = myFixture.tempDirFixture.getFile("target/generated-sources/annotations")!!
+
+        installProjects(listOf(mavenProject))
+
+        ApplicationManager.getApplication().runWriteAction {
+
+            val model = ModuleRootManager.getInstance(module).modifiableModel
+
+            try {
+
+                model.addContentEntry(directory).addSourceFolder(
+                    generated,
+                    JavaSourceRootType.SOURCE,
+                    JavaSourceRootProperties("", true)
+                )
+
+                model.commit()
+
+            } finally {
+
+                if (!model.isDisposed) {
+
+                    model.dispose()
+
+                }
+
+            }
+
+        }
+
+        val node = rootNode().children.filterIsInstance<BuildModuleNode>().single()
+
+        assertTrue(node.getChildrenImpl().isEmpty())
+
+        project.service<GeneratedSourcesSettings>().showGeneratedSources = true
+
+        assertTrue(node.getChildrenImpl().filterIsInstance<PackageNode>().single().isGenerated)
 
     }
 

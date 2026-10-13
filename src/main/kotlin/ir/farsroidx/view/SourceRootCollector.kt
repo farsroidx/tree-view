@@ -2,6 +2,7 @@ package ir.farsroidx.view
 
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.roots.ModuleRootManager
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import ir.farsroidx.view.model.SourceRoot
 import org.jetbrains.jps.model.java.JavaResourceRootType
@@ -34,7 +35,8 @@ object SourceRootCollector {
                         directory,
                         folder.isTestSource,
                         folder.rootType is JavaResourceRootType,
-                        folder.packagePrefix
+                        folder.packagePrefix,
+                        ProjectFileIndex.getInstance(module.project).isInGeneratedSources(directory)
                     )
 
                 }
